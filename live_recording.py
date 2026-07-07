@@ -16,7 +16,7 @@ if len(sys.argv) < 2:
 
 name = sys.argv[1]
 os.makedirs("recorded_data", exist_ok=True)
-OUTPUT_CSV   = f"recorded_data/{name}.csv"
+OUTPUT_CSV   = f"data/clap/{name}.csv"
 OUTPUT_VIDEO = f"recorded_data/{name}.mp4"
 
 LANDMARK_NAMES = [

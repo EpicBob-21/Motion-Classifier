@@ -6,7 +6,7 @@ import sys
 
 # ── Config ───────────────────────────────────────────────────────────────────
 MODEL_PATH   = "pose_landmarker_full.task"
-SAMPLE_DIR   = "sample_videos"
+SAMPLE_DIR   = "zed_video"
 MAX_PEOPLE   = 10
 # ─────────────────────────────────────────────────────────────────────────────
 
