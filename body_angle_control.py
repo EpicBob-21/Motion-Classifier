@@ -17,11 +17,11 @@ SOUND_DIR = "flowedit_sounds"
 FLIP = 1               # set to -1 if left/right feel swapped
 SMOOTHING = 0.3        # 0..1, lower = smoother but laggier
 
-KICK_SPEED = 3.0       # m/s, ankle speed relative to hips needed to count as a kick
-KICK_LIFT = 0.25       # m, min height difference between the two ankles
+ROCK_SPEED = 60.0      # deg/s, how fast the lean must swing to count as a rock
+ROCK_MIN_ANGLE = 8.0   # deg, minimum sideways lean when the rock fires
 BOOMERANG_OUT = 0.6    # seconds to sweep out to the end file
 BOOMERANG_BACK = 0.8   # seconds to sweep back to the current body angle
-KICK_COOLDOWN = 0.3    # seconds after a boomerang before another kick registers
+ROCK_COOLDOWN = 0.3    # seconds after a boomerang before another rock registers
 # ----------------------------------------
 
 BaseOptions = mp.tasks.BaseOptions
@@ -102,28 +102,54 @@ class ScrubPlayer:
         )
 
 
-class KickDetector:
-    """Flags a kick when an ankle moves fast (relative to the hips) while the
-    feet are at clearly different heights. Returns 'left', 'right' or None."""
+def torso_lean_deg(world):
+    """Sideways lean of the upper body. + = leaning to your left, - = to your right.
+    Measured along the shoulder line, so it's independent of torso yaw."""
+    l, r = world[11], world[12]
+    lh, rh = world[23], world[24]
+
+    # unit vector along the shoulders (horizontal plane)
+    ax, az = l.x - r.x, l.z - r.z
+    norm = math.hypot(ax, az) or 1e-6
+    ax, az = ax / norm, az / norm
+
+    # hips -> shoulders
+    vx = (l.x + r.x) / 2 - (lh.x + rh.x) / 2
+    vy = (l.y + r.y) / 2 - (lh.y + rh.y) / 2
+    vz = (l.z + r.z) / 2 - (lh.z + rh.z) / 2
+
+    lateral = vx * ax + vz * az
+    vertical = -vy  # MediaPipe world y points down
+    return math.degrees(math.atan2(lateral, vertical))
+
+
+class RockDetector:
+    """Flags a rock when the upper body leans sideways quickly.
+    Returns 'left', 'right' or None."""
 
     def __init__(self):
-        self.prev = None
-        self.speed = 0.0
+        self.prev = None      # (timestamp, lean)
+        self.speed = 0.0      # signed deg/s, for the HUD
+        self.lean = 0.0
 
     def update(self, world, ts_s):
-        pts = {i: np.array([world[i].x, world[i].y, world[i].z]) for i in (27, 28)}
-        kick = None
+        if min(world[i].visibility for i in (11, 12, 23, 24)) < 0.5:
+            self.prev = None
+            return None
+
+        lean = torso_lean_deg(world)
+        rock = None
         if self.prev is not None:
             dt = ts_s - self.prev[0]
             if 0 < dt < 0.2:
-                lift = abs(pts[27][1] - pts[28][1])
-                speeds = {i: np.linalg.norm(pts[i] - self.prev[1][i]) / dt for i in pts}
-                leg = max(speeds, key=speeds.get)
-                self.speed = speeds[leg]
-                if self.speed > KICK_SPEED and lift > KICK_LIFT and world[leg].visibility > 0.5:
-                    kick = "left" if leg == 27 else "right"
-        self.prev = (ts_s, pts)
-        return kick
+                self.speed = (lean - self.prev[1]) / dt
+                # must be leaning *out* (speed and lean same sign), past the min angle
+                if (abs(self.speed) > ROCK_SPEED and abs(lean) > ROCK_MIN_ANGLE
+                        and self.speed * lean > 0):
+                    rock = "left" if lean > 0 else "right"
+        self.lean = lean
+        self.prev = (ts_s, lean)
+        return rock
 
 
 def smoothstep(p):
@@ -173,7 +199,7 @@ options = PoseLandmarkerOptions(
 
 player = ScrubPlayer(SOUND_DIR)
 n_files = len(player.names)
-kicks = KickDetector()
+rocks = RockDetector()
 
 yaw_smooth = None
 body_idx = 0.0       # file index implied by torso angle (continuous)
@@ -206,12 +232,12 @@ with PoseLandmarker.create_from_options(options) as landmarker, player.stream():
             frac = float(np.clip((90 - FLIP * yaw_smooth) / 180, 0, 1))
             body_idx = frac * (n_files - 1)
 
-            # Kick detection (once per new pose result)
+            # Rock detection (once per new pose result)
             if latest_ts != last_ts:
                 last_ts = latest_ts
-                kick = kicks.update(world, latest_ts / 1000)
-                if kick and boomerang is None and now - boomerang_end > KICK_COOLDOWN:
-                    toward_first = (kick == "left") == (FLIP == 1)
+                rock = rocks.update(world, latest_ts / 1000)
+                if rock and boomerang is None and now - boomerang_end > ROCK_COOLDOWN:
+                    toward_first = (rock == "left") == (FLIP == 1)
                     boomerang = {
                         "phase": "out",
                         "t0": now,
@@ -237,9 +263,9 @@ with PoseLandmarker.create_from_options(options) as landmarker, player.stream():
 
         label = f"yaw {yaw_smooth if yaw_smooth is not None else 0:+.0f} | {player.names[player.target]}"
         if boomerang:
-            label += "  [KICK]"
+            label += "  [ROCK]"
         cv2.putText(frame, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame, f"ankle speed {kicks.speed:.1f} m/s", (10, 60),
+        cv2.putText(frame, f"lean {rocks.lean:+.0f} deg  speed {rocks.speed:+.0f} deg/s", (10, 60),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
 
         cv2.imshow("BlazePose", frame)
