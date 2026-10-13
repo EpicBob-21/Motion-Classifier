@@ -1,0 +1,28 @@
+{
+  "id": "2ba32f4a8b3d",
+  "created": 1791145743.75025,
+  "src_prompt": "TrackType: Instrument, Snare drum loop with sharp transient attack, resonant metal sound, and dry recording quality.",
+  "tar_prompt": "TrackType: Instrument, Loud bass drum loop with deep, resonant impact, dry recording quality, and punchy transient attack.",
+  "seed": 4126542865,
+  "model": "stable-audio-3-medium",
+  "duration_s": 1.896,
+  "n_slots": 11,
+  "render_s": 3.3,
+  "parent_id": "53822da9dbe1",
+  "parent_slot": 10,
+  "notes": "",
+  "starred": false,
+  "tags": [],
+  "params": {
+    "src_prompt": "TrackType: Instrument, Snare drum loop with sharp transient attack, resonant metal sound, and dry recording quality.",
+    "tar_prompt": "TrackType: Instrument, Loud bass drum loop with deep, resonant impact, dry recording quality, and punchy transient attack.",
+    "seconds_total": 2,
+    "lfe_steps": 20,
+    "n_avg": 10,
+    "src_lfe_cfg_scale": 1,
+    "tar_lfe_cfg_scale": 7,
+    "num_intermediates": 9,
+    "even_steps": true,
+    "seed": -1
+  }
+}
